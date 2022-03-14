@@ -26,6 +26,17 @@ begin
 	using ForwardDiff: derivative, gradient, jacobian
 end
 
+# ╔═╡ b363d59b-efbb-4e35-bb26-ef884ceadfda
+md"""
+Add new package:
+"""
+
+# ╔═╡ c88612f4-0fa2-4d3e-8cd4-9714a50715c9
+# begin
+# 	import Pkg
+# 	Pkg.add("PyPlot")
+# end
+
 # ╔═╡ 75081cf5-a327-4e4e-8569-8a96f5179479
 md"""
 Activate the environment:
@@ -247,11 +258,11 @@ md"""
 """
 
 # ╔═╡ 80594b16-6ce3-40dd-84e7-41ed51bc67fc
-# @bind m Slider(1:10, default=5)
-@bind m Slider(0.005:0.001:0.015, default = 0.01)
+@bind m Slider(1:10, default=5)
+# @bind m Slider(0.005:0.001:0.015, default = 0.01)
 
 # ╔═╡ 2a449106-a6c4-44b1-9b00-0286601b2ef4
-Vtype = Quadratic((m, 0))
+Vtype = Quadratic((1, m))
 # Vtype = GenericPotential((m₁ = 1, m₂ = m))
 
 # ╔═╡ e480cc80-7ea5-49cd-a593-5b91b67874b5
@@ -260,11 +271,11 @@ md"""
 """
 
 # ╔═╡ 2a9225fa-4d33-4235-96d6-855a42909298
-@bind L Slider(0.03:0.01:0.1, default = 0.05)
+# @bind L Slider(0.03:0.01:0.1, default = 0.05)
 
 # ╔═╡ 64f543ad-db9c-48ae-8971-01a88ec7c18a
-# Gtype = Canonical();
-Gtype = Hyperbolic2D(L)
+Gtype = Canonical();
+# Gtype = Hyperbolic2D(L)
 # Gtype = GenericMetric((; L = L))
 
 # ╔═╡ 7ae28d3d-1d42-494c-af60-95a2f3c56585
@@ -290,9 +301,9 @@ gr()
 function plotV(MyModel::Model, xrange = -10:0.1:10, yrange = -10:0.1:10)
 	@assert MyModel.nfields == 2 "Can only plot 2D potential"
 	
-	pV = surface(xrange, yrange, (ϕ₁, ϕ₂) -> V(MyModel.Potential)([ϕ₁, ϕ₂]), xlabel=latexify(MyModel.fields[1]), ylabel=latexify(MyModel.fields[2]), zlabel=L"$V(\phi)$")
+	pV = surface(xrange, yrange, (ϕ₁, ϕ₂) -> V(MyModel.Potential)([ϕ₁, ϕ₂]), xlabel=latexify(MyModel.fields[1]), ylabel=latexify(MyModel.fields[2]), zlabel=L"$V(\phi)$", dpi=300)
 
-	plnV = surface(xrange, yrange, (ϕ₁, ϕ₂) -> log(V(MyModel.Potential)([ϕ₁, ϕ₂])), xlabel=latexify(MyModel.fields[1]), ylabel=latexify(MyModel.fields[2]), zlabel=L"$ln(V)(\phi)$")
+	plnV = surface(xrange, yrange, (ϕ₁, ϕ₂) -> log(V(MyModel.Potential)([ϕ₁, ϕ₂])), xlabel=latexify(MyModel.fields[1]), ylabel=latexify(MyModel.fields[2]), zlabel=L"$ln(V)(\phi)$", dpi=300)
 
 	pV, plnV
 end;
@@ -348,7 +359,7 @@ begin
 		ϕ₀::Array
 	end
 	
-	initial(SR::SlowRoll, MyModel::Model) = vcat(SR.ϕ₀, -inv(G(MyModel.Metric)(SR.ϕ₀))*gradient(lnV(MyModel.Potential), SR.ϕ₀))
+	initial(SR::SlowRoll, MyModel::Model) = vcat(SR.ϕ₀, -inv(G(MyModel.Metric)(SR.ϕ₀))*gradient(ϕ -> log(V(MyModel.Potential)(ϕ)), SR.ϕ₀))
 
 	struct HyperInflation2D <: InitialConditions
 		ϕ₀::Array
@@ -371,9 +382,9 @@ end;
 
 # ╔═╡ 17f22706-f6cc-4a79-a733-1d98b160967f
 begin
-	ϕ₀ = [10., 1.]
-	# ζ₀ = initial(SlowRoll(ϕ₀), MyModel)
-	ζ₀ = initial(HyperInflation2D(ϕ₀), MyModel)
+	ϕ₀ = [11., 11.]
+	ζ₀ = initial(SlowRoll(ϕ₀), MyModel)
+	# ζ₀ = initial(HyperInflation2D(ϕ₀), MyModel)
 	Nmin, Nmax = 0., 1000.
 	Ns = (Nmin, Nmax)
 end;
@@ -406,11 +417,20 @@ problem(MyModel::Model, IC::Vector, Ns::Tuple, abstol = 1e-8, reltol = 1e-8) = O
 # ╔═╡ b8fa1f85-c96a-4b52-bb5d-b65209441a4d
 solution = solve(problem(MyModel, ζ₀, Ns, 1e-300), Tsit5())
 
-# ╔═╡ bb717a4f-627f-4e79-9baf-94577461663d
+# ╔═╡ a517ba42-291d-40c2-934d-75c30da7eff7
+function plotsol!(MyModel::Model, solution::ODESolution, legend=false, label=missing)
+	if typeof(MyModel.Metric) == Hyperbolic2D
+		
+		return plot!(solution, vars = (2, 1), legend=legend, label=label, dpi = 300, proj=:polar, xlabel = latexify(MyModel.fields[1]), ylabel=latexify(MyModel.fields[2]), lims=(0,0.5), yguidefontsize=8, title="Trajectory in the ("*latexify(MyModel.fields[1])*", "*latexify(MyModel.fields[2])*") plane")
+	end
+
+	return plot!(solution, vars = (1,2), legend=legend, label=label, arrow=true, dpi = 300, xlabel = latexify(MyModel.fields[1]), ylabel=latexify(MyModel.fields[2]))
+end;
+
+# ╔═╡ 7bfc172b-5ede-42bd-a526-42be51e42f2a
 begin
-	plot(solution, vars = (1,2), legend=false, arrow=true, dpi = 300)
-	xlabel!(latexify(MyModel.fields[1]))
-	ylabel!(latexify(MyModel.fields[2]))
+	plot()
+	plotsol!(MyModel, solution)
 end
 
 # ╔═╡ d470672a-0abc-4b1d-93c3-f66fc1d303bd
@@ -437,13 +457,13 @@ begin
 		ζ, dζ = sol(N), derivative(N -> sol(N), N)
 		ϕ, ξ = ζ[1:Int(length(ζ)/2)], ζ[Int(length(ζ)/2) + 1:end]
 		@tensor covariant[a] := inv(G(MyModel.Metric)(ϕ))[a, d] * Christoffel(MyModel.Metric)(ϕ)[d, b, c] * ξ[b] * ξ[c]
-		dζ[Int(length(ζ)/2) + 1:end] + covariant
+		dζ[Int(length(dζ)/2) + 1:end] + covariant
 	end
 
 	ησ(MyModel::Model, sol::ODESolution) = function(N::Real)
 		ζ, dζ = sol(N), derivative(N -> sol(N), N)
 		ϕ, ξ = ζ[1:Int(length(ζ)/2)], ζ[Int(length(ζ)/2) + 1:end]
-		dot(MyModel.Metric, η(MyModel, sol)(N), ϕ)(ϕ)/norm(MyModel.Metric, ϕ)(ϕ)
+		dot(MyModel.Metric, η(MyModel, sol)(N), ξ)(ϕ)/norm(MyModel.Metric, ξ)(ϕ)
 	end
 
 	ηs(MyModel::Model, sol::ODESolution) = function(N::Real)
@@ -458,16 +478,35 @@ begin
 	end
 end;
 
-# ╔═╡ 368e1e76-ab78-4609-a909-4996356ad9f4
+# ╔═╡ f5a46baf-e5e8-405f-9153-ddf9df5c6dbb
 begin
-	pϵ = plot(Nmin:0.01:Nend, ϵ(MyModel, solution), legend=false)
-	ylabel!(latexify("ϵ"))
-	pησ = plot(Nmin:0.1:Nend, N -> ησ(MyModel, solution)(N)/v(MyModel, solution)(N), legend=false)
-	ylabel!(latexify("η_σ/v"))
-	pηs = plot(Nmin:0.1:Nend, N -> ηs(MyModel, solution)(N)/v(MyModel, solution)(N), legend=false)
-	ylabel!(latexify("η_s/v"))
-	xlabel!(latexify("N"))
-	plot(pϵ, pησ, pηs, layout = (3, 1), size = (600, 600), dpi = 300)
+	function plotϵ!(MyModel::Model, solution::ODESolution, legend=false, label=missing)
+		Nend = solution.t[end]
+		plot!(Nmin:0.01:Nend, ϵ(MyModel, solution), legend=legend, label=label, xlabel=latexify("N"), ylabel=latexify("ϵ"))
+	end
+	
+	function plotησ!(MyModel::Model, solution::ODESolution, legend=false, label=missing)
+		Nend = solution.t[end]
+		pησ = plot!(Nmin:0.1:Nend, N -> ησ(MyModel, solution)(N)/v(MyModel, solution)(N), legend=legend, label=label, xlabel=latexify("N"), ylabel=latexify("η_σ/v"))
+	end
+	
+	function plotηs!(MyModel::Model, solution::ODESolution, legend=false, label=missing)
+		Nend = solution.t[end]
+		pηs = plot!(Nmin:0.1:Nend, N -> ηs(MyModel, solution)(N)/v(MyModel, solution)(N), legend=legend, label=label, xlabel=latexify("N"), ylabel=latexify("η_s/v"))
+	end
+end;
+
+# ╔═╡ 724f0557-7e63-4709-8298-f9e8868115a3
+begin
+	plot()
+	pϵ = plotϵ!(MyModel, solution)
+	xlabel!("")
+	plot()
+	pησ = plotησ!(MyModel, solution)
+	xlabel!("")
+	plot()
+	pηs = plotηs!(MyModel, solution)
+	plot(pϵ, pησ, pηs, layout=(3,1), size=(600,600), dpi=300)
 end
 
 # ╔═╡ c491e06e-1f00-4a32-84b1-fe6a9adcffb2
@@ -475,38 +514,89 @@ md"""
 ## Varying the parameters
 """
 
-# ╔═╡ abdffa97-41e1-4837-894e-d644ebf73a78
+# ╔═╡ 1d5d1c0b-2efd-4e9a-b633-37f68fdc9ff5
 begin
-	nfieldsp = 2
-	mp = 0.01
+	modeltag = "HI"
+	# pname, prange = :m, 1:1:10
+	pname, prange = :L, 0.03:0.01:0.1
+	Vt(p::Real) = Quadratic((0.01, 0))
+	Gt(p::Real) = Hyperbolic2D(p)
+	# Gt(p::Real) = Canonical()
+
+	MyMdl(p::Real) = Model(nfields = nfields, input_field_names = (:ϕ, :χ), Potential = Vt(p), Metric = Gt(p))
+
 	ϕ₀p = [10., 1.]
-	Nsp = (Nmin, Nmax)
+	# initialpt = SlowRoll(ϕ₀p)
+	initialpt = HyperInflation2D(ϕ₀p)
+	init(p::Real) = initial(initialpt, MyMdl(p))
+end;
+
+# ╔═╡ 32c62918-0cfd-479c-b1b3-e7ca6276f098
+begin
 	Models, initials, problems, solutions = [], [], [], []
-	for Lp in 0.03:0.01:0.1
-		Vtypep, Gtypep = Quadratic((mp, 0)), Hyperbolic2D(Lp)
-		Modelp = Model(nfields = nfieldsp, Potential = Vtypep, Metric = Gtypep)
-		push!(Models, Modelp)
-
-		ζ₀p = initial(HyperInflation2D(ϕ₀p), Modelp)
-		push!(initials, ζ₀p)
-
-		problemp = problem(Modelp, ζ₀p, Ns, 1e-300)
-		push!(problems, problemp)
-		push!(solutions, solve(problemp, Tsit5()))
+	for p in prange
+		push!(Models, MyMdl(p))
+	
+		push!(initials, initial(initialpt, MyMdl(p)))
+	
+		push!(problems, problem(MyMdl(p), initial(initialpt, MyMdl(p)), Ns, 1e-300))
+		push!(solutions, solve(problem(MyMdl(p), initial(initialpt, MyMdl(p)), Ns, 1e-300), Tsit5()))
 	end
 end
 
 # ╔═╡ 2eda1cff-3a01-4f45-848c-8f7c18b9436f
 begin
-	plot()
-	for solution in solutions
-		plot!(solution, vars = (1,2), legend=false, arrow=true, dpi = 300)
+	ptrajs = plot(dpi=300)
+	for (n, p) in enumerate(prange)
+		plotsol!(MyMdl(p), solutions[n], :topleft, latexify(string(pname)*" = $p"))
 	end
+	plot!()
 	xlabel!(latexify(MyModel.fields[1]))
 	ylabel!(latexify(MyModel.fields[2]))
+
+	savefig(ptrajs, "output/"*modeltag*"_trajs")
+	plot!()
+end
+
+# ╔═╡ b068fadb-94eb-4956-b027-9560959a1da0
+begin
+	pϵp = plot(dpi=300)
+	for (n, p) in enumerate(prange)
+		plotϵ!(MyMdl(p), solutions[n], :topleft, latexify(string(pname)*" = $p"))
+	end
+	plot!()
+
+	savefig(pϵp, "output/"*modeltag*"_epsilon")
+	plot!()
+end
+
+# ╔═╡ a5487e79-bb6e-4d38-ab2f-37e63b32aba4
+begin
+	pησp = plot(dpi=300)
+	for (n, p) in enumerate(prange)
+		plotησ!(MyMdl(p), solutions[n], :topleft, latexify(string(pname)*" = $p"))
+	end
+	plot!()
+
+	savefig(pησp, "output/"*modeltag*"_etapar")
+	plot!()
+end
+
+# ╔═╡ c95256ff-43a8-45cf-a315-5bc7c7ae3fcb
+begin
+	pησs = plot(dpi=300)
+	for (n, p) in enumerate(prange)
+		plotηs!(MyMdl(p), solutions[n], :topleft, latexify(string(pname)*" = $p"))
+	end
+	plot!()
+
+	savefig(pησs, "output/"*modeltag*"_etaperp")
+	plot!()
 end
 
 # ╔═╡ Cell order:
+# ╟─b363d59b-efbb-4e35-bb26-ef884ceadfda
+# ╟─c88612f4-0fa2-4d3e-8cd4-9714a50715c9
 # ╟─75081cf5-a327-4e4e-8569-8a96f5179479
 # ╟─50172480-9ef3-11ec-21a7-f74589ea5026
 # ╟─277fb121-e8eb-48f5-b398-078aaa9ce3a6
@@ -554,12 +644,18 @@ end
 # ╟─2db2be07-ddea-40dd-a2a9-cea5e2e694e6
 # ╟─fec32909-1d73-4c36-8107-da1cb2f78055
 # ╠═b8fa1f85-c96a-4b52-bb5d-b65209441a4d
-# ╟─bb717a4f-627f-4e79-9baf-94577461663d
+# ╟─a517ba42-291d-40c2-934d-75c30da7eff7
+# ╟─7bfc172b-5ede-42bd-a526-42be51e42f2a
 # ╟─d470672a-0abc-4b1d-93c3-f66fc1d303bd
 # ╟─c25a6cbc-392f-4cb8-9153-ce77025f6cdc
 # ╟─5e91f713-8708-4aca-be0b-65b226087751
 # ╟─a1faeefb-3c5e-41da-9a77-a0d74a2db431
-# ╟─368e1e76-ab78-4609-a909-4996356ad9f4
+# ╟─f5a46baf-e5e8-405f-9153-ddf9df5c6dbb
+# ╟─724f0557-7e63-4709-8298-f9e8868115a3
 # ╟─c491e06e-1f00-4a32-84b1-fe6a9adcffb2
-# ╠═abdffa97-41e1-4837-894e-d644ebf73a78
+# ╠═1d5d1c0b-2efd-4e9a-b633-37f68fdc9ff5
+# ╟─32c62918-0cfd-479c-b1b3-e7ca6276f098
 # ╟─2eda1cff-3a01-4f45-848c-8f7c18b9436f
+# ╟─b068fadb-94eb-4956-b027-9560959a1da0
+# ╟─a5487e79-bb6e-4d38-ab2f-37e63b32aba4
+# ╟─c95256ff-43a8-45cf-a315-5bc7c7ae3fcb
