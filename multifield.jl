@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.18.1
+# v0.17.3
 
 using Markdown
 using InteractiveUtils
@@ -26,6 +26,9 @@ begin
 	using ForwardDiff: derivative, gradient, jacobian
 end
 
+# ╔═╡ e2306bb5-b84f-482a-9b06-48af1c79cb89
+cd("/home/gsalinas/GitHub/multifield")
+
 # ╔═╡ b363d59b-efbb-4e35-bb26-ef884ceadfda
 md"""
 Add new package:
@@ -34,7 +37,7 @@ Add new package:
 # ╔═╡ c88612f4-0fa2-4d3e-8cd4-9714a50715c9
 # begin
 # 	import Pkg
-# 	Pkg.add("PyPlot")
+# 	Pkg.add(["PlutoTest", "PlutoUI", "TensorOperations", "Parameters", "Roots"])
 # end
 
 # ╔═╡ 75081cf5-a327-4e4e-8569-8a96f5179479
@@ -118,8 +121,19 @@ Type below the formula for the potential:
 
 # ╔═╡ 973052be-4ed9-4dfa-bacc-c8c798683b77
 V(GP::GenericPotential) = function(ϕ::Vector)
-	ϕ₁, ϕ₂ = ϕ
-	0.5*(GP.params.m₁^2*ϕ₁^2 + GP.params.m₂^2*ϕ₂^2)
+	r, θ = ϕ
+	N, gₛ, lₛ, q, a₀, a₁, b₁, p, V₀ = GP.params
+	u, μ₅, L4T11 = 50lₛ, 1/((2pi)^5*lₛ^6), 27pi*N*gₛ*lₛ^4/4.
+	T₅ = μ₅/gₛ
+	γ =  4pi^2*lₛ^2*p*q*T₅*gₛ
+	
+	𝓗 = L4T11/(3u)^4 * (18u^2/r^2-2log(9u^2/r^2+1))
+	𝓕 = 𝓗/9*(r^2+3u^2)^2 + (pi*lₛ^2*q)^2
+	φ = 4pi*p*T₅/𝓗*(sqrt(𝓕)-lₛ^2*pi*q*gₛ)
+	Φm = 5/72*(9*(r^2/u^2-2)*r^2/u^2 + 162log(r^2/u^2+9) - 9 - 160log(10))
+	Φh = a₀*(18u^2/r^2-2log(9u^2/r^2+1)) + 2a₁*(6+9u^2/r^2-2(2+r^2/(3u^2))log(1+9u^2/r^2))cos(θ) + b₁/2*(2+r^2/(3u^2))cos(θ)
+
+	V₀ + φ + γ*(Φm+Φh)
 end;
 
 # ╔═╡ 8ccd9f97-1248-4f69-a9a8-d1c18965e9b6
@@ -191,8 +205,15 @@ Type below the formula for the field space metric:
 
 # ╔═╡ d59fa4db-cd80-402e-a024-974a9ddf2e46
 G(GM::GenericMetric) = function(ϕ::Vector)
-	ϕ₁, ϕ₂ = ϕ
-	[1 0; 0 GP.params.L^2*sinh(ϕ₁/GP.params.L)^2]
+	r, θ = ϕ
+	N, gₛ, lₛ, q, p = GM.params
+	u, μ₅, L4T11 = 50lₛ, 1/((2pi)^5*lₛ^6), 27pi*N*gₛ*lₛ^4/4.
+	T₅ = μ₅/gₛ
+
+	𝓗 = L4T11/(3u)^4 * (18u^2/r^2-2log(9u^2/r^2+1))
+	𝓕 = 𝓗/9*(r^2+3u^2)^2 + (pi*lₛ^2*q)^2
+	
+	4pi*p*T₅*sqrt(𝓕)*[(r^2+6u^2)/(r^2+9u^2) 0; 0 (r^2+6u^2)/6]
 end;
 
 # ╔═╡ 73e7ba6e-7a4e-4051-9c07-711042d1abbf
@@ -258,12 +279,23 @@ md"""
 """
 
 # ╔═╡ 80594b16-6ce3-40dd-84e7-41ed51bc67fc
-@bind m Slider(1:10, default=5)
+# @bind m Slider(1:10, default=5)
 # @bind m Slider(0.005:0.001:0.015, default = 0.01)
+begin
+	N = 1000
+	gₛ = 0.01
+	lₛ = 501.961
+	q = 1
+	a₀ = 0.001
+	a₁ = 0.0005
+	b₁ = 0.001
+	p = 5 	# Change p later
+	V₀ = -1.1775724676177187e-8
+end;
 
 # ╔═╡ 2a449106-a6c4-44b1-9b00-0286601b2ef4
-Vtype = Quadratic((1, m))
-# Vtype = GenericPotential((m₁ = 1, m₂ = m))
+# Vtype = Quadratic((1, m))
+Vtype = GenericPotential((N=N, gₛ=gₛ, lₛ=lₛ, q=q, a₀=a₀, a₁=a₁, b₁=b₁, p=p, V₀=V₀))
 
 # ╔═╡ e480cc80-7ea5-49cd-a593-5b91b67874b5
 md"""
@@ -274,9 +306,9 @@ md"""
 # @bind L Slider(0.03:0.01:0.1, default = 0.05)
 
 # ╔═╡ 64f543ad-db9c-48ae-8971-01a88ec7c18a
-Gtype = Canonical();
+# Gtype = Canonical();
 # Gtype = Hyperbolic2D(L)
-# Gtype = GenericMetric((; L = L))
+Gtype = GenericMetric((N=N, gₛ=gₛ, lₛ=lₛ, q=q, p=p))
 
 # ╔═╡ 7ae28d3d-1d42-494c-af60-95a2f3c56585
 md"""
@@ -286,7 +318,7 @@ md"""
 # ╔═╡ 7134e45c-0530-4041-a00f-cfaae7a2a8c2
 begin
 	nfields = 2
-	MyModel = Model(nfields = nfields, Potential = Vtype, Metric = Gtype)
+	MyModel = Model(nfields = nfields, input_field_names=(:r, :θ), Potential = Vtype, Metric = Gtype)
 end
 
 # ╔═╡ 8e49b081-2da1-45ee-a0c5-1733667fcfd4
@@ -309,7 +341,7 @@ function plotV(MyModel::Model, xrange = -10:0.1:10, yrange = -10:0.1:10)
 end;
 
 # ╔═╡ 4a21987b-a56c-4ad2-a71b-00369b6c8d57
-plotV(MyModel)[1]
+plotV(MyModel, 10:0.1:40, 0:0.1:15)[1]
 
 # ╔═╡ 90006555-5775-421f-b5e8-6a2ddf3d973a
 plotV(MyModel)[2]
@@ -382,10 +414,11 @@ end;
 
 # ╔═╡ 17f22706-f6cc-4a79-a733-1d98b160967f
 begin
-	ϕ₀ = [11., 11.]
+	ϕ₀ = [4., 0.95]
 	ζ₀ = initial(SlowRoll(ϕ₀), MyModel)
 	# ζ₀ = initial(HyperInflation2D(ϕ₀), MyModel)
-	Nmin, Nmax = 0., 1000.
+	# ζ₀ = [ϕ₀[1], ϕ₀[2], .1, .1]
+	Nmin, Nmax = 0., 60.
 	Ns = (Nmin, Nmax)
 end;
 
@@ -412,10 +445,11 @@ begin
 end;
 
 # ╔═╡ fec32909-1d73-4c36-8107-da1cb2f78055
-problem(MyModel::Model, IC::Vector, Ns::Tuple, abstol = 1e-8, reltol = 1e-8) = ODEProblem(ODE(MyModel), IC, Ns, callback = end_cb(MyModel), abstol = abstol, reltol = reltol);
+# problem(MyModel::Model, IC::Vector, Ns::Tuple, abstol = 1e-8, reltol = 1e-8) = ODEProblem(ODE(MyModel), IC, Ns, callback = end_cb(MyModel), abstol = abstol, reltol = reltol);
+problem(MyModel::Model, IC::Vector, Ns::Tuple, abstol = 1e-8, reltol = 1e-8) = ODEProblem(ODE(MyModel), IC, Ns, abstol = abstol, reltol = reltol);
 
 # ╔═╡ b8fa1f85-c96a-4b52-bb5d-b65209441a4d
-solution = solve(problem(MyModel, ζ₀, Ns, 1e-300), Tsit5())
+solution = solve(problem(MyModel, ζ₀, Ns), Tsit5())
 
 # ╔═╡ a517ba42-291d-40c2-934d-75c30da7eff7
 function plotsol!(MyModel::Model, solution::ODESolution, legend=false, label=missing)
@@ -576,8 +610,8 @@ begin
 	for (n, p) in enumerate(prange)
 		plotησ!(MyMdl(p), solutions[n], :topleft, latexify(string(pname)*" = $p"))
 	end
-	plot!()
-
+	ylims!(-1, 3)
+	
 	savefig(pησp, "output/"*modeltag*"_etapar")
 	plot!()
 end
@@ -595,6 +629,7 @@ begin
 end
 
 # ╔═╡ Cell order:
+# ╟─e2306bb5-b84f-482a-9b06-48af1c79cb89
 # ╟─b363d59b-efbb-4e35-bb26-ef884ceadfda
 # ╟─c88612f4-0fa2-4d3e-8cd4-9714a50715c9
 # ╟─75081cf5-a327-4e4e-8569-8a96f5179479
@@ -637,12 +672,12 @@ end
 # ╟─ab171ae1-fa68-4ac0-ae7e-33a2487ed695
 # ╟─77e12e51-84c1-48e9-827d-867277b7186f
 # ╟─8da3562d-9d13-46ce-91ce-0413bf89a530
-# ╟─75ba08d6-3a55-4147-b239-e4786f8c1803
+# ╠═75ba08d6-3a55-4147-b239-e4786f8c1803
 # ╠═17f22706-f6cc-4a79-a733-1d98b160967f
 # ╟─f6c9a053-85d9-47ce-b24f-3b27d6a297b0
 # ╟─eaee4f56-a385-4e03-9bb3-e7bfe113d8f6
 # ╟─2db2be07-ddea-40dd-a2a9-cea5e2e694e6
-# ╟─fec32909-1d73-4c36-8107-da1cb2f78055
+# ╠═fec32909-1d73-4c36-8107-da1cb2f78055
 # ╠═b8fa1f85-c96a-4b52-bb5d-b65209441a4d
 # ╟─a517ba42-291d-40c2-934d-75c30da7eff7
 # ╟─7bfc172b-5ede-42bd-a526-42be51e42f2a
